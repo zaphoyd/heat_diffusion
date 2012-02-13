@@ -1,0 +1,536 @@
+<!doctype html>
+<html>
+<head>
+<script language="javascript" type="text/javascript" src="flot/jquery.js"></script>
+<script language="javascript" type="text/javascript" src="flot/jquery.flot.js"></script>
+</head>
+<body>
+
+<script type="text/javascript">
+
+var ws;
+var url;
+
+var throttle = null;
+var throttle_data = null;
+
+var guided_sim_running = false;
+var custom_sim_running = false;
+
+var dmode = "canvas";
+var dcontext;
+var dplot;
+var smode = "utf8";
+
+var sparameters;
+var sdata_binary;
+var sdata_utf8;
+var sdata_steps;
+var sdata_flot;
+
+function reset_simulation() {
+	sdata_binary = new Uint8Array();
+	sdata_utf8 = [];
+	sdata_steps = 0;
+	sdata_flot = [];
+	sparameters = null;
+	throttle = null;
+	throttle_data = null;
+}
+
+function toggle_dmode() {
+	if (dmode == "flot") {
+		// TODO: remove flot chart
+		// TODO: create canvas
+		
+		$("#display").html("<canvas id='2d' width='400' height='400'></canvas>");
+		
+		var canvas = $("#2d");
+		
+		// Always check for properties and methods, to make sure your code doesn't break 
+		// in other browsers.
+		if (canvas && canvas[0].getContext) {
+			// Get the 2d context.
+			// Remember: you can only initialize one context per element.
+			dcontext = canvas[0].getContext('2d');
+		}
+		
+		dmode = "canvas";
+		draw();
+	} else if (dmode == "canvas") {
+		
+	} else {
+		console.log("invalid dmode");
+	}
+}
+
+function init_canvas() {
+	if (sparameters === null) {
+		return;
+	}
+	
+	nx = sparameters.nx;
+	ny = (sparameters.dimensions == 1 ? sparameters.nx : sparameters.ny);
+	
+	$("#display").html("<canvas id='2d' width='"+nx+"' height='"+ny+"'></canvas>");
+		
+	var canvas = $("#2d");
+	
+	// Always check for properties and methods, to make sure your code doesn't break 
+	// in other browsers.
+	if (canvas && canvas[0].getContext) {
+		// Get the 2d context.
+		// Remember: you can only initialize one context per element.
+		dcontext = canvas[0].getContext('2d');
+		
+		if (dcontext) {
+			dcontext.fillStyle = "#000";
+			dcontext.rect(0, 0, nx, ny);
+		}
+	}
+	
+	dmode = "canvas";
+	draw();
+}
+
+function init_flot() {
+	// TODO: remove canvas
+		
+	// TODO: scale this properly to lsizes
+	var options = {
+		series: { shadowSize: 0 }, // drawing is faster without shadows
+		xaxis: {ticks:10, min: 0.0, max: 1.0},
+		yaxis: {ticks:10, min: 0.0, max: 1.0}
+	};
+	
+	$("#display").css("width","400");
+	$("#display").css("height","400");
+	
+	dplot = $.plot($("#display"), [ sdata_flot ], options);
+	dmode = "flot";
+	draw();
+}
+
+// transfers binary or utf8 data into the array for flot graphing. (1D only)
+function update_flot() {
+	if (dmode == "flot") {
+		sdata_flot = [];
+		if (smode == "utf8") {
+			for (var i = 0; i < sdata_utf8.length; i++) {
+				sdata_flot.push([i/sparameters.nx,sdata_utf8[i]/255.0]);
+			}
+		} else if (smode == "arraybuffer") {
+			for (var i = 0; i < sdata_binary.length; i++) {
+				sdata_flot.push([i/sparameters.nx,sdata_binary[i]/255.0]);
+			}
+		} else {
+			console.log("invalid smode");
+		}
+	}
+}
+
+function draw() {
+	
+	// update status field
+	if (guided_sim_running) {
+		$("#simulation_status").html((sdata_steps-1)*sparameters.callback_interval+"/"+sparameters.timesteps);
+		$("#custom_simulation_status").html("");
+	} else if (custom_sim_running) {
+		$("#custom_simulation_status").html((sdata_steps-1)*sparameters.callback_interval+"/"+sparameters.timesteps);
+		$("#simulation_status").html("");
+	} else {
+		$("#custom_simulation_status").html("");
+		$("#simulation_status").html("");
+	}
+	
+	// are we in flot or canvas mode?
+	if (dmode == "flot") {
+		dplot.setData([ sdata_flot ]);
+		dplot.draw();
+	} else if (dmode == "canvas") {
+		draw_canvas();
+	} else {
+		console.log("invalid dmode");
+	}
+}
+
+function draw_canvas() {
+	if (!dcontext) {
+		console.log("can't draw, no 2d context");
+		return;	
+	}
+	
+	if (sparameters === null) {
+		return;
+	}
+	
+	d = new Date();
+			
+	if (throttle == null || d.getTime() > throttle+100) {
+		throttle = d.getTime();
+	} else {
+		return;
+	}
+	
+	
+	nx = sparameters.nx;
+	ny = (sparameters.dimensions == 1 ? sparameters.nx : sparameters.ny);
+	
+	idata = dcontext.createImageData(nx,ny);
+    
+    if (smode == "binary") {
+    	foo = sdata_binary;
+    } else {
+    	foo = sdata_utf8;
+    }
+    
+    if (sparameters.dimensions == 1) {
+    	for (var i = 0; i < nx; i++) {
+			for (var j = 0; j < ny; j++) {
+				index = (i+j*idata.width)*4;
+					
+				idata.data[index+0] = foo[i];
+				idata.data[index+1] = foo[i];
+				idata.data[index+2] = foo[i];
+				idata.data[index+3] = 0xff;
+			}
+		}
+    } else {
+    	for (var i = 0; i < nx; i++) {
+			for (var j = 0; j < ny; j++) {
+				sindex = (i*ny+j);
+				index = (i+j*idata.width)*4;
+					
+				idata.data[index+0] = foo[sindex];
+				idata.data[index+1] = foo[sindex];
+				idata.data[index+2] = foo[sindex];
+				idata.data[index+3] = 0xff;
+			}
+		}
+    }
+		
+	dcontext.putImageData(idata,0,0);
+}
+
+function connect() {
+    url = document.getElementById("server_url").value;
+    console.log(url);
+    
+    if ("WebSocket" in window) {
+        ws = new WebSocket(url);
+        ws.binaryType = "arraybuffer";
+    } else if ("MozWebSocket" in window) {
+        ws = new MozWebSocket(url);
+        ws.binaryType = "arraybuffer";
+    } else {
+        document.getElementById("messages").innerHTML += "This Browser does not support WebSockets<br />";
+        return;
+    }
+    ws.onopen = function(e) {
+        document.getElementById("messages").innerHTML += "Client: A connection to "+ws.URL+" has been opened.<br />";
+        
+        document.getElementById("server_url").disabled = true;
+        document.getElementById("toggle_connect").innerHTML = "Disconnect";
+    };
+    
+    ws.onerror = function(e) {
+        document.getElementById("messages").innerHTML += "Client: An error occured, see console log for more details.<br />";
+        console.log(e);
+    };
+    
+    ws.onclose = function(e) {
+        document.getElementById("messages").innerHTML += "Client: The connection to "+url+" was closed.<br />";
+        disconnect();
+    };
+    
+    ws.onmessage = function(e) {
+		if (e.data.byteLength === undefined) {
+			var data = JSON.parse(e.data);
+			
+			if (data.type == "message") {
+				document.getElementById("messages").innerHTML += "Server: "+data.value+"<br />";
+				
+				if (data.value.substr(0,20) == "Simulation Completed") {
+					update_flot();
+					throttle = null;
+					draw();
+					
+					$("#toggle_simulation").attr("disabled","");
+					$("#toggle_custom_simulation").attr("disabled","");
+    				$("#toggle_simulation").html("Start Simulation");
+    				$("#toggle_custom_simulation").html("Start Simulation");
+    				guided_sim_running = false;
+    				custom_sim_running = false;
+				}
+				
+			} else if (data.type == "data") {
+				//console.log(e.data);
+				sdata_utf8 = data.value;
+				sdata_steps++;
+				update_flot();
+				draw();
+			} else {
+				$("#messages").append("Server: "+e.data+"<br />");
+			}
+    	} else {
+    		d = new Date();
+			
+			sdata_steps++;
+			
+			if (throttle_data == null || d.getTime() > throttle_data+100) {
+				throttle_data = d.getTime();
+				
+				sdata_binary = new Uint8Array(e.data);
+			} else {
+				console.log("throttle write");
+			}
+    		
+    		update_flot();
+			draw();
+    	}
+    };
+}
+
+function disconnect() {
+    ws.close();
+    document.getElementById("server_url").disabled = false;
+    document.getElementById("toggle_connect").innerHTML = "Connect";
+}
+
+function toggle_connect() {
+    if (document.getElementById("server_url").disabled === false) {
+        connect();
+    } else {
+        disconnect();
+    }
+}
+
+function send() {
+    if (ws === undefined || ws.readyState != 1) {
+        document.getElementById("messages").innerHTML += "Client: Websocket is not avaliable for writing<br />";
+        return;
+    }
+    
+    var simulationid = document.getElementById("msg").value;
+    
+    simulation_data = [[]];
+    simulation_binary = new Uint8Array();
+	simulation_binary_steps = 0;
+    
+    ws.send(document.getElementById("msg").value);
+}
+
+
+
+
+function toggle_custom_simulation() {
+    if (ws === undefined || ws.readyState != 1) {
+        document.getElementById("messages").innerHTML += "Client: Not connected to a simulation server.<br />";
+        return;
+    }
+    
+    if (guided_sim_running) {
+    	document.getElementById("messages").innerHTML += "Client: A guided simulation is already running. Cancel it before running a custom one.<br />";
+        return;
+    }
+    
+    if (custom_sim_running) {
+    	// send cancel request
+    	ws.send("cancel:");
+    } else {
+    	// send new request
+    	
+    	
+    	// required parameters
+    	// dimensions
+    	// nx, ny, nz (for appropriate dimensions
+    	// timesteps
+    	
+    	// set sparameters
+    	raw = $("#custom_simulation").val();
+    	foo = raw.split(":");
+    	
+    	if (foo.length < 2) {
+    		$("#messages").append("Invalid simulation string");
+    		return;
+    	}
+    	
+    	
+    	bar = foo[1].split(";");
+    	
+    	p = {};
+    	p.dimensions = 1;
+    	p.callback_interval = 100;
+    	p.nx = 400;
+    	p.timesteps = 1000;
+    	
+    	for (var i = 0; i < bar.length; i++) {
+    		temp = bar[i].split("=");
+    		if (temp[0] == "dimensions") {
+    			p.dimensions = temp[1];
+    		}
+    		if (temp[0] == "timesteps") {
+    			p.timesteps = temp[1];
+    		}
+    		if (temp[0] == "callback_interval") {
+    			p.callback_interval = temp[1];
+    		}
+    		if (temp[0] == "nx") {
+				p.nx = temp[1];
+			}
+			if (temp[0] == "ny") {
+				p.ny = temp[1];
+			}
+			if (temp[0] == "nz") {
+				p.nz = temp[1];
+			}
+    	}
+    	
+    	if (p.dimensions == 2 && p.ny == undefined) {
+    		$("#messages").append("2D simulations must specify ny");
+    		return;
+    	}
+    	
+    	if (p.dimensions == 3 && (p.ny == undefined || p.nz == undefined)) {
+    		$("#messages").append("3D simulations must specify ny and nz");
+    		return;
+    	}
+    	
+    	// Go!
+    	reset_simulation();
+    	sparameters = p;
+    	init_canvas();
+    	custom_sim_running = true;
+    	$("#toggle_simulation").attr("disabled","disabled");
+    	$("#toggle_custom_simulation").html("Cancel Simulation");
+    	ws.send($("#custom_simulation").val());
+    }    
+}
+
+reset_simulation();
+
+</script>
+
+<style>
+body,html {
+    margin: 0px;
+    padding: 0px;
+}
+
+h2 {
+	margin: 0.5em 0;
+	font-size:18px;
+}
+
+#application {
+	display: -webkit-box;
+	display: box;
+	display: -moz-box;
+	display: -ms-box;
+	box-orient: horizontal;
+	-webkit-box-orient: horizontal;
+	-moz-box-orient: horizontal;
+	-ms-box-orient: horizontal;
+	
+	height: 100%;
+}
+
+#control {
+	padding: 5px;
+	width: 300px;
+	display: box;
+	display: -webkit-box;
+	display: -moz-box;
+	display: -ms-box;
+	box-orient: vertical;
+	-webkit-box-orient: vertical;
+	-moz-box-orient: vertical;
+	-ms-box-orient: vertical;
+}
+
+#viewer {
+	/*width: 400px;*/
+}
+
+#messages {
+	box-flex: 1;
+	-webkit-box-flex: 1;
+	-moz-box-flex: 1;
+	-ms-box-flex: 1;
+	
+	padding: 5px;
+	
+	overflow: scroll;
+	min-width: 300px;
+}
+
+#server {
+	margin-bottom: 10px;
+}
+
+#custom_simulation {
+	width: 280px;
+	height: 100px;
+}
+
+</style>
+
+<div id="application">
+<div id="control">
+	<div id="server">
+		<h2>Server Connection</h2>
+		<input type="text" name="server_url" id="server_url" value="ws://thor-websocket.zaphoyd.net:9002" />
+    	<button id="toggle_connect" onclick="toggle_connect();">Connect</button>
+	</div>
+	<div id="simulation">
+		<h2>Guided Simulation</h2>
+		Dimensions: <select id="dimensions">
+		<option value="1">1</option>
+		<option value="2">2</option>
+		<option value="3">3</option>
+		</select><br />
+		Timesteps: <input id="timesteps" value="1000" /><br />
+		dt: <input id="dt" value="0.001" /><br />
+		alpha: <input id="dt" value="0.0005" /><br />
+		Initial Conditions: <select id="initial">
+		<option value="0">Flat</option>
+		<option value="1" selected>Gaussian</option>
+		<option value="2">Gaussian+Noise</option>
+		</select><br />
+		Boundary Handling: <select id="boundary">
+		<option value="0">Constant</option>
+		<option value="1">Periodic</option>
+		</select><br />
+		Boundary Value: <input id="bvalue" value="0.0" /><br />
+		X length: <input id="lx" value="1" size="5" /> resolution: <input id="nx" value="400" size="5" /><br />
+		Y length: <input id="ly" value="0" size="5" /> resolution: <input id="ny" value="0" size="5" /><br />
+		Z length: <input id="lz" value="0" size="5" /> resolution: <input id="nz" value="0" size="5" /><br />
+		Callback Interval: <input id="callback_interval" value="100" /><br />
+		<button id="toggle_simulation" onclick="toggle_simulation();">Start Simulation</button><span id="simulation_status"></span><br />
+		<h2>Custom Simulation</h2>
+		<textarea id="custom_simulation">simulate:timesteps=1000;</textarea><br />
+		<button id="toggle_custom_simulation" onclick="toggle_custom_simulation();">Start Simulation</button><span id="custom_simulation_status"></span>
+	</div>
+</div>
+<div id="viewer">
+	<div id="display"></div>
+</div>
+<div id="messages"></div>
+</div>
+<!--
+<div id="controls">
+    <div id="server">
+    
+    </div>
+
+    
+    
+    <div id="simulation_status"></div>
+    
+    <div id="messages"></div>
+</div>
+-->
+
+
+</body>
+</html>
