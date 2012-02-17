@@ -263,9 +263,9 @@ public:
             }
             
             std::cout << "ts: " << t << std::endl;
-			std::cout << "initial A: " << std::endl << A << std::endl;
-			std::cout << "initial b: " << b << std::endl;
-			
+            std::cout << "initial A: " << std::endl << A << std::endl;
+            std::cout << "initial b: " << b << std::endl;
+            
             upper_triangulate(A,b);
             
             std::cout << "solved A: " << std::endl << A << std::endl;
@@ -275,9 +275,9 @@ public:
             
             std::cout << "solved x: " << x << std::endl;
 
-			for (size_t i = 0; i < nx; i++) {
-				x[i] += S[i]*dt;
-			}
+            for (size_t i = 0; i < nx; i++) {
+                x[i] += S[i]*dt;
+            }
         }
 
         // this should be optimized with a object1d copy constructor from vector or a 

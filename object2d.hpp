@@ -212,7 +212,7 @@ public:
         callback(buf[(t+1)%2],t);
     }
     
-	/// runs a Crank Nichsolson discritized simulation of heat diffusion of object o
+    /// runs a Crank Nichsolson discritized simulation of heat diffusion of object o
     /* Run a Crank Nicholson simulation of heat diffusion of object o
      *
      * @param ts Number of timesteps to simulate
@@ -237,11 +237,11 @@ public:
                          size_t callback_interval) const
     {
         double dx = m_lx / m_nx;
-		double dy = m_ly / m_ny;
+        double dy = m_ly / m_ny;
         double C = m_alpha*dt/(pow(dx,2));
         size_t nx = m_nx;
-		size_t ny = m_ny;
-       	
+        size_t ny = m_ny;
+        
         if (nx < 2 || ny < 2) {
             throw std::invalid_argument("object must have size at least 2");
         }
@@ -254,9 +254,9 @@ public:
         
         // load initial conditions
         for (size_t i = 0; i < nx; i++) {
-			for (size_t j = 0; j < ny; j++) {
+            for (size_t j = 0; j < ny; j++) {
                 x[i*nx+j] = m_data[i][j];
-			}
+            }
         }
 
         size_t t;
@@ -276,62 +276,62 @@ public:
             }
 
             for (size_t i = 0; i < nx; i++) {
-				for (size_t j = 0; j < ny; j++) {
+                for (size_t j = 0; j < ny; j++) {
                     if (i != 0) {
                         A[i*nx+j][i*nx+j-nx] = -1*C/2.0;
-					}
-					
+                    }
+                    
                     if (j != 0) {
                         A[i*nx+j][i*nx+j-1] = -1*C/2.0;
-					}
-					
+                    }
+                    
                     A[i*nx+j][i*nx+j] = (1+2*C);
                     
                     if (j != ny-1) {
                         A[i*nx+j][i*nx+j+1] = -1*C/2.0;
-					}
+                    }
 
-					if (i != nx-1) {
+                    if (i != nx-1) {
                         A[i*nx+j][i*nx+j+nx] = -1*C/2.0;
-					}
-				}
+                    }
+                }
             }
             
 
             // Fill in b
-			double top,right,bottom,left;
+            double top,right,bottom,left;
             for (size_t i = 0; i < nx; i++) {
                 for (size_t j = 0; j < ny; j++) {
                     if (i == 0) {
                         top = (bs == CONSTANT ? v : x[(nx-1)*nx+j]);
-						bottom = x[(i+1)*nx+j];
-					} else if (i == nx-1) {
-						top = x[(i-1)*nx+j];
-						bottom = (bs == CONSTANT ? v : x[j]);
-					} else {
-						top = x[(i-1)*nx+j];
-						bottom = x[(i+1)*nx+j];
-					}
-					
-					if (j == 0) {
-						left = (bs == CONSTANT ? v : x[i*nx+ny-1]);
-						right = x[i*nx+j+1];
-					} else if (j == ny-1) {
-						left = x[i*nx+j-1];
-						right = (bs == CONSTANT ? v : x[i]);
-					} else {
-						left = x[i*nx+j-1];
-						right = x[i*nx+j+1];
-					}
+                        bottom = x[(i+1)*nx+j];
+                    } else if (i == nx-1) {
+                        top = x[(i-1)*nx+j];
+                        bottom = (bs == CONSTANT ? v : x[j]);
+                    } else {
+                        top = x[(i-1)*nx+j];
+                        bottom = x[(i+1)*nx+j];
+                    }
+                    
+                    if (j == 0) {
+                        left = (bs == CONSTANT ? v : x[i*nx+ny-1]);
+                        right = x[i*nx+j+1];
+                    } else if (j == ny-1) {
+                        left = x[i*nx+j-1];
+                        right = (bs == CONSTANT ? v : x[i]);
+                    } else {
+                        left = x[i*nx+j-1];
+                        right = x[i*nx+j+1];
+                    }
 
                     b[i*nx+j] = x[i*nx+j] + (C/2.0)*(top+right+bottom+left-4*x[i*nx+j]);
                 }
             }
-			
-			std::cout << "ts: " << t << std::endl;
-			std::cout << "initial A: " << std::endl << A << std::endl;
-			std::cout << "initial b: " << b << std::endl;
-			
+            
+            std::cout << "ts: " << t << std::endl;
+            std::cout << "initial A: " << std::endl << A << std::endl;
+            std::cout << "initial b: " << b << std::endl;
+            
             upper_triangulate(A,b);
             
             std::cout << "solved A: " << std::endl << A << std::endl;
@@ -340,12 +340,12 @@ public:
             back_sub(A,b,x);
             
             std::cout << "solved x: " << x << std::endl;
-			
-			for (size_t i = 0; i < nx; i++) {
-				for (size_t j = 0; j < ny; j++) {
-				    x[i*nx+j] += S[i][j]*dt;
+            
+            for (size_t i = 0; i < nx; i++) {
+                for (size_t j = 0; j < ny; j++) {
+                    x[i*nx+j] += S[i][j]*dt;
                 }
-			}
+            }
         }
 
         // this should be optimized with a object1d copy constructor from vector or a 

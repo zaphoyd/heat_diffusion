@@ -57,6 +57,7 @@ smode - simulation snapshot format. Allowed values [0,1] default: 0; 0=JSON,1=BI
 Examples
 simulate:
 cancel:
+simulate:timesteps=100000;
 simulate:timesteps=1000;dimensions=2;nx=100;ny=100;ly=1.0;
 simulate:timesteps=100000;dimensions=2;nx=100;ny=100;ly=1.0;callback_interval=1000;
 
