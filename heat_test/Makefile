@@ -5,8 +5,8 @@
 CPP11               = -std=c++0x
 DEBUG				= 0
 
-CFLAGS = $(CPP11) -I$(BOOST_INCLUDE_PATH) -I$(WEBSOCKETPP_PATH)
-LDFLAGS = -L$(BOOST_LIB_PATH)
+CFLAGS = $(CPP11)
+LDFLAGS = 
 
 CXX		= clang++
 

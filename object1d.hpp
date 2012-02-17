@@ -262,8 +262,18 @@ public:
                 b[i] = x[i] + (C/2.0)*(x[i-1]+x[i+1]-2*x[i]);
             }
             
+            std::cout << "ts: " << t << std::endl;
+			std::cout << "initial A: " << std::endl << A << std::endl;
+			std::cout << "initial b: " << b << std::endl;
+			
             upper_triangulate(A,b);
+            
+            std::cout << "solved A: " << std::endl << A << std::endl;
+            std::cout << "solved b: " << b << std::endl;
+            
             back_sub(A,b,x);
+            
+            std::cout << "solved x: " << x << std::endl;
 
 			for (size_t i = 0; i < nx; i++) {
 				x[i] += S[i]*dt;

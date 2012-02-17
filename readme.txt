@@ -57,6 +57,8 @@ smode - simulation snapshot format. Allowed values [0,1] default: 0; 0=JSON,1=BI
 Examples
 simulate:
 cancel:
+simulate:timesteps=1000;dimensions=2;nx=100;ny=100;ly=1.0;
+simulate:timesteps=100000;dimensions=2;nx=100;ny=100;ly=1.0;callback_interval=1000;
 
 The client will operate on any modern browser with WebSocket support. This includes:
 Safari 5.0.1+
@@ -69,9 +71,46 @@ On browsers with full RFC6455 support it will use binary websocket for drastical
 Chrome 16+
 FireFox 11+
 
-Building the server requires Boost 1.47+ and WebSocket++ (github.com/zaphoyd/websocketpp) both built in C++11 mode. I have an example server running that you can play with at heat.zaphoyd.net.
+Building the server requires Boost and WebSocket++ (github.com/zaphoyd/websocketpp). If you have trouble building it let me know. I also have an example server running that you can play with at heat.zaphoyd.net
 
 Example make statement:
 
-make CXX=g++4.6 DEBUG=0 WEBSOCKETPP_PATH=/path/to/websocketpp/headers WEBSOCKETPP=/path/to/websocketpplib.a BOOST_INCLUDE_PATH=/path/to/boost/headers BOOST_LIB_PATH=/path/to/boost/libs
+make CXX=g++ DEBUG=0 WEBSOCKETPP_PATH=/path/to/websocketpp/headers WEBSOCKETPP=/path/to/websocketpplib.a BOOST_INCLUDE_PATH=/path/to/boost/headers BOOST_LIB_PATH=/path/to/boost/libs
 
+I have successfully built heat_server on the linux cluster using the following:
+git clone git://github.com/zaphoyd/websocketpp.git
+git clone git://github.com/zaphoyd/heat_diffusion.git
+cd websocketpp
+make
+cd ../heat_diffusion/heat_server
+make CXX=g++ CSPP_LINUX=1 WEBSOCKETPP=../../websocketpp/libwebsocketpp.a WEBSOCKETPP_PATH=../../websocketpp/src
+
+The server runs but there appears to be firewalls in place that prevent anything but localhost from actually talking to it. You should be able to use the local heat_client.html file to connect to a locally running server at ws://localhost:9002
+
+
+
+Performance Analysis:
+
+FTCS 3D 1000 time steps
+10x10x10 cube: 00:00:00.143543
+20x20x20 cube: 00:00:01.131008
+30x30x30 cube: 00:00:03.829194
+40x40x40 cube: 00:00:09.083705
+50x50x50 cube: 00:00:17.804704
+60x60x60 cube: 00:00:30.732263
+70x70x70 cube: 00:00:48.869378
+80x80x80 cube: 00:01:12.005312
+90x90x90 cube: 00:01:44.246772
+100x100x100 cube: 00:02:22.738739
+
+size      µs          µs/size  µs/timestep
+1,000     143543      143.543  143.543        
+8,000     1131008     141.376  1131.008
+27,000    3829194     141.822  3829.194
+64,000    9083705     141.932  9083.705
+125,000	  17804704	  142.437  17804.704
+216,000	  30732263	  142.278  30732.263
+343,000	  48869378	  142.476  48869.378
+512,000	  72005312	  140.635  72005.312
+729,000	  104246772	  142.999  104246.772
+1,000,000  142738739  142.738  142738.739
