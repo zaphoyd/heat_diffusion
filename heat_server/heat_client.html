@@ -20,7 +20,7 @@ var custom_sim_running = false;
 var dmode = "canvas";
 var dcontext;
 var dplot;
-var smode = "utf8";
+var smode = 1;
 
 var sparameters;
 var sdata_binary;
@@ -115,11 +115,11 @@ function init_flot() {
 function update_flot() {
 	if (dmode == "flot") {
 		sdata_flot = [];
-		if (smode == "utf8") {
+		if (smode == 0) {
 			for (var i = 0; i < sdata_utf8.length; i++) {
 				sdata_flot.push([i/sparameters.nx,sdata_utf8[i]/255.0]);
 			}
-		} else if (smode == "arraybuffer") {
+		} else if (smode == 1) {
 			for (var i = 0; i < sdata_binary.length; i++) {
 				sdata_flot.push([i/sparameters.nx,sdata_binary[i]/255.0]);
 			}
@@ -178,7 +178,7 @@ function draw_canvas() {
 	
 	idata = dcontext.createImageData(nx,ny);
     
-    if (smode == "binary") {
+    if (smode == 1) {
     	foo = sdata_binary;
     } else {
     	foo = sdata_utf8;
@@ -218,10 +218,21 @@ function connect() {
     
     if ("WebSocket" in window) {
         ws = new WebSocket(url);
-        ws.binaryType = "arraybuffer";
+        
+        if (ws.binaryType == "blob") {
+        	ws.binaryType = "arraybuffer";
+        	smode = 1;
+        } else {
+        	smode = 0;
+        }
     } else if ("MozWebSocket" in window) {
         ws = new MozWebSocket(url);
-        ws.binaryType = "arraybuffer";
+        if (ws.binaryType == "blob") {
+        	ws.binaryType = "arraybuffer";
+        	smode = 1;
+        } else {
+        	smode = 0;
+        }
     } else {
         document.getElementById("messages").innerHTML += "This Browser does not support WebSockets<br />";
         return;
@@ -253,6 +264,7 @@ function connect() {
 				if (data.value.substr(0,20) == "Simulation Completed") {
 					update_flot();
 					throttle = null;
+					throttle_data = null;
 					draw();
 					
 					$("#toggle_simulation").attr("disabled","");
@@ -263,11 +275,25 @@ function connect() {
     				custom_sim_running = false;
 				}
 				
+			} else if (data.type == "error") {
+				$("#messages").append("Server Error: "+data.value+"<br />");
+				
+				$("#toggle_simulation").attr("disabled","");
+				$("#toggle_custom_simulation").attr("disabled","");
+				$("#toggle_simulation").html("Start Simulation");
+				$("#toggle_custom_simulation").html("Start Simulation");
+				guided_sim_running = false;
+				custom_sim_running = false;
 			} else if (data.type == "data") {
-				//console.log(e.data);
-				sdata_utf8 = data.value;
+				if (throttle_data === null || d.getTime() > throttle_data+100 || (sdata_steps-1)*sparameters.callback_interval >= sparameters.timesteps) {
+					throttle_data = d.getTime();
+					
+					sdata_utf8 = data.value;
+					update_flot();
+				}
+					
 				sdata_steps++;
-				update_flot();
+				
 				draw();
 			} else {
 				$("#messages").append("Server: "+e.data+"<br />");
@@ -277,15 +303,13 @@ function connect() {
 			
 			sdata_steps++;
 			
-			if (throttle_data == null || d.getTime() > throttle_data+100) {
+			if (throttle_data === null || d.getTime() > throttle_data+100 || (sdata_steps-1)*sparameters.callback_interval >= sparameters.timesteps) {
 				throttle_data = d.getTime();
 				
 				sdata_binary = new Uint8Array(e.data);
-			} else {
-				console.log("throttle write");
-			}
+				update_flot();
+			} 		
     		
-    		update_flot();
 			draw();
     	}
     };
@@ -347,7 +371,7 @@ function toggle_custom_simulation() {
     	// timesteps
     	
     	// set sparameters
-    	raw = $("#custom_simulation").val();
+    	raw = $("#custom_simulation").val()+"smode="+smode+";";
     	foo = raw.split(":");
     	
     	if (foo.length < 2) {
@@ -403,7 +427,7 @@ function toggle_custom_simulation() {
     	custom_sim_running = true;
     	$("#toggle_simulation").attr("disabled","disabled");
     	$("#toggle_custom_simulation").html("Cancel Simulation");
-    	ws.send($("#custom_simulation").val());
+    	ws.send(raw);
     }    
 }
 
