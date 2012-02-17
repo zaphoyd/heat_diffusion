@@ -20,6 +20,11 @@ enum initial_condition {
 	GAUSSIAN_NOISE = 2
 };
 
+enum disc_method {
+	FTCS = 0,
+	CRANK_NICHOLSON = 1
+};
+
 /// return a gaussian distribution
 /* Returns an vector populated with a gaussian distribution scaled to between
  * zero and one with a specified resolution.

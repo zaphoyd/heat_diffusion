@@ -55,29 +55,30 @@ using websocketpp::server;
 // and add it to the processing queue. Sleeping in this example is a placeholder
 // for any long serial task.
 struct request {
-	// connection related
+    // connection related
     server::handler::connection_ptr con;
     
     // simulation parameters
-    int					dimensions;
-    int					lx;
-    int					ly;
-    int					lz;
-    size_t				nx;
-    size_t				ny;
-    size_t				nz;
-    initial_condition	initial;
-    boundary_style		boundaries;
-    double				bvalue;
-    size_t				timesteps;
-    double				dt;
-    double 				alpha;
-    
+    int                 dimensions;
+    int                 lx;
+    int                 ly;
+    int                 lz;
+    size_t              nx;
+    size_t              ny;
+    size_t              nz;
+    initial_condition   initial;
+    boundary_style      boundaries;
+    double              bvalue;
+    size_t              timesteps;
+    double              dt;
+    double              alpha;
+    disc_method         method;
+
     // simulation state
-    bool				stop;
-	size_t				zslice;
-	smode				mode;
-	size_t				callback_interval;
+    bool                stop;
+    size_t              zslice;
+    smode               mode;
+    size_t              callback_interval;
     
     boost::posix_time::ptime start_time;
     boost::posix_time::ptime end_time;
@@ -88,12 +89,13 @@ struct request {
        nx(400), ny(0), nz(0),
        initial(GAUSSIAN),
        boundaries(CONSTANT), bvalue(0.0),
-       timesteps(100000), dt(0.001),
+       timesteps(10000), dt(0.001),
        alpha(0.0005),
+       method(FTCS),
        stop(false),
-	   zslice(0),
-	   mode(JSON),
-	   callback_interval(100) {}
+       zslice(0),
+       mode(JSON),
+       callback_interval(100) {}
     
     /// Simulation callback hook
     /* print is called from within the simulation loops to provide an update on
@@ -104,76 +106,138 @@ struct request {
      * continue or halt immediately. Returning `false` will halt the simulation
      */
     template <typename T>
-    bool print(const T& o,size_t ts) {
-    	if (mode == JSON) {
-    		std::string foo = "{\"type\":\"data\",\"value\":"+o.json(false)+"}";
-    		//std::cout << foo << std::endl;
-    		con->send(foo);
-    	} else if (mode == BINARY) {
-    		con->send(o.binary(false), websocketpp::frame::opcode::BINARY);
-    	}
-		
-		return !stop;
-	}
+    bool print(const T& o,size_t ts,bool edges) {
+        if (mode == JSON) {
+            std::string foo = "{\"type\":\"data\",\"value\":"+o.json(edges)+"}";
+            con->send(foo);
+        } else if (mode == BINARY) {
+            con->send(o.binary(edges), websocketpp::frame::opcode::BINARY);
+        }
+        
+        return !stop;
+    }
     
-	bool print(const object3d& o, size_t ts) {
-		if (mode == JSON) {
-    		//con->send("{\"type\":\"data\",\"value\":"+o.json_slice(zslice,false)+"}");
-    	} else if (mode == BINARY) {
-    		con->send(o.binary(false), websocketpp::frame::opcode::BINARY);
-    	}
+    bool print_slice(const object3d& o, size_t ts,bool edges) {
+        if (mode == JSON) {
+            con->send("{\"type\":\"data\",\"value\":"+o.json_slice(zslice,edges)+"}");
+        } else if (mode == BINARY) {
+            con->send(o.binary_slice(zslice,edges), websocketpp::frame::opcode::BINARY);
+        }
 
-		return !stop;
-	}
+        return !stop;
+    }
 
     void process() {
         send_text("Starting Simulation");
         start_time = boost::posix_time::microsec_clock::local_time();
         
         if (dimensions == 1) {
-        	object1d object(lx,nx,alpha);
-        	object1d source(lx,nx,0.0);
-			object.init(initial);
-			source.init(FLAT);
-			
-			stop = false;
-			
-			object.ftcs(
-				timesteps, dt,
-				boundaries, bvalue,
-				source,
-				std::bind(
-					&request::print<object1d>,
-					this,
-					std::placeholders::_1,
-					std::placeholders::_2
-				),
-				callback_interval
-			);
+            object1d object(lx,nx,alpha);
+            object1d source(lx,nx,0.0);
+            object.init(initial);
+            source.init(FLAT);
+            
+            stop = false;
+            
+            switch (method) {
+                case FTCS:
+                    object.ftcs(
+                        timesteps, dt,
+                        boundaries, bvalue,
+                        source,
+                        std::bind(
+                            &request::print<object1d>,
+                            this,
+                            std::placeholders::_1,
+                            std::placeholders::_2,
+							false
+                        ),
+                        callback_interval
+                    );
+                    break;
+                case CRANK_NICHOLSON:
+                    object.crank_nicholson(
+                        timesteps, dt,
+                        boundaries, bvalue,
+                        source,
+                        std::bind(
+                            &request::print<object1d>,
+                            this,
+                            std::placeholders::_1,
+                            std::placeholders::_2,
+							true
+                        ),
+                        callback_interval
+                    );
+                    break;
+                default:
+                    break;
+            }
         } else if (dimensions == 2) {
-			object2d object(lx,ly,nx,ny,alpha);
-        	object2d source(lx,ly,nx,ny,0.0);
-			object.init(initial);
-			source.init(FLAT);
-			
-			stop = false;
-			
-			object.ftcs(
-				timesteps, dt,
-				boundaries, bvalue,
-				source,
-				std::bind(
-					&request::print<object2d>,
-					this,
-					std::placeholders::_1,
-					std::placeholders::_2
-				),
-				callback_interval
-			);
+            object2d object(lx,ly,nx,ny,alpha);
+            object2d source(lx,ly,nx,ny,0.0);
+            object.init(initial);
+            source.init(FLAT);
+            
+            stop = false;
+            
+            switch (method) {
+                case FTCS:
+                    object.ftcs(
+                        timesteps, dt,
+                        boundaries, bvalue,
+                        source,
+                        std::bind(
+                            &request::print<object2d>,
+                            this,
+                            std::placeholders::_1,
+                            std::placeholders::_2,
+							false
+                        ),
+                        callback_interval
+                    );
+                    break;
+                case CRANK_NICHOLSON:
+                    object.crank_nicholson(
+                        timesteps, dt,
+                        boundaries, bvalue,
+                        source,
+                        std::bind(
+                            &request::print<object2d>,
+                            this,
+                            std::placeholders::_1,
+                            std::placeholders::_2,
+							true
+                        ),
+                        callback_interval
+                    );
+                    break;
+                default:
+                    break;
+            }
         } else if (dimensions == 3) {
-        	send_text("3D simulation not implimented yet");
+            object3d object(lx,ly,lz,nx,ny,nz,alpha);
+            object3d source(lx,ly,lz,nx,ny,nz,0.0);
+            object.init(initial);
+            source.init(FLAT);
+            
+            stop = false;
+            
+            object.ftcs(
+                timesteps, dt,
+                boundaries, bvalue,
+                source,
+                std::bind(
+                    &request::print_slice,
+                    this,
+                    std::placeholders::_1,
+                    std::placeholders::_2,
+					false
+                ),
+                callback_interval
+            );
         } else {
-        	send_text("Invalid Dimensions, shouldn't be here");
+            send_text("Invalid Dimensions, shouldn't be here");
         }
         
         end_time = boost::posix_time::microsec_clock::local_time();
@@ -186,11 +250,11 @@ struct request {
     }
     
     void send_text(const std::string& msg) {
-    	con->send("{\"type\":\"message\",\"value\":\""+msg+"\"}");
+        con->send("{\"type\":\"message\",\"value\":\""+msg+"\"}");
     }
     
     void cancel() {
-    	stop = true;
+        stop = true;
     }
 };
 
@@ -220,7 +284,7 @@ public:
         return r;
     }
 private:
-    std::queue<request_ptr>		m_requests;
+    std::queue<request_ptr>     m_requests;
     boost::mutex                m_lock;
     boost::condition_variable   m_cond;
 };
@@ -233,156 +297,179 @@ public:
         wscmd::cmd command = wscmd::parse(msg->get_payload());
         
         if (command.command == "simulate") {
-        	// simulate
-        	// dimensions=[1,2,3]
-        	// lx = [1-1000]
-        	// ly = [1-1000]
-        	// lz = [1-1000]
-        	// nx = [1-1000]
-        	// ny = [1-1000]
-        	// nz = [1-1000]
-        	// initial = [0]
-        	// timesteps = [1-10000000]
-        	// boundary = [0,1]
-        	// dt = [float]
-        	// alpha = [float]
-        	
-        	request_ptr r(new request());
-        	
-        	r->con = con;
-        	
-        	if (command.args["dimensions"] != "") {
-        		if (std::atoi(command.args["dimensions"].c_str()) >= 1 && std::atoi(command.args["dimensions"].c_str()) <= 3) {
-        			r->dimensions = std::atoi(command.args["dimensions"].c_str());
-        		} else {
-        			send_text(con,"invalid dimensions");
-            		return;
-        		}
-        	}
-        	
-        	if (command.args["lx"] != "") {
-        		if (std::atoi(command.args["lx"].c_str()) >= 1 && std::atoi(command.args["lx"].c_str()) <= 1000) {
-        			r->lx = std::atoi(command.args["lx"].c_str());
-        		} else {
-        			send_text(con,"invalid lx");
-            		return;
-        		}
-        	}
-        	
-        	if (command.args["ly"] != "") {
-        		if (std::atoi(command.args["ly"].c_str()) >= 1 && std::atoi(command.args["ly"].c_str()) <= 1000 && r->dimensions >= 2) {
-        			r->ly = std::atoi(command.args["ly"].c_str());
-        		} else {
-        			send_text(con,"invalid ly");
-            		return;
-        		}
-        	}
-        	
-        	if (command.args["lz"] != "") {
-        		if (std::atoi(command.args["lz"].c_str()) >= 1 && std::atoi(command.args["lz"].c_str()) <= 1000 && r->dimensions == 3) {
-        			r->lz = std::atoi(command.args["lz"].c_str());
-        		} else {
-        			send_text(con,"invalid lz");
-            		return;
-        		}
-        	}
-        	
-        	if (command.args["nx"] != "") {
-        		if (std::atoi(command.args["nx"].c_str()) >= 1 && std::atoi(command.args["nx"].c_str()) <= 10000) {
-        			r->nx = std::atoi(command.args["nx"].c_str());
-        		} else {
-        			send_text(con,"invalid nx");
-            		return;
-        		}
-        	}
-        	
-        	if (command.args["ny"] != "") {
-        		if (std::atoi(command.args["ny"].c_str()) >= 1 && std::atoi(command.args["ny"].c_str()) <= 10000 && r->dimensions >= 2) {
-        			r->ny = std::atoi(command.args["ny"].c_str());
-        		} else {
-        			send_text(con,"invalid ny");
-            		return;
-        		}
-        	}
-        	
-        	if (command.args["nz"] != "") {
-        		if (std::atoi(command.args["nz"].c_str()) >= 1 && std::atoi(command.args["nz"].c_str()) <= 10000 && r->dimensions == 3) {
-        			r->nz = std::atoi(command.args["nz"].c_str());
-        		} else {
-        			send_text(con,"invalid nz");
-            		return;
-        		}
-        	}
-        	
-        	if (command.args["timesteps"] != "") {
-        		if (std::atoi(command.args["timesteps"].c_str()) >= 1 && std::atoi(command.args["timesteps"].c_str()) <= 100000000) {
-        			r->timesteps = std::atoi(command.args["timesteps"].c_str());
-        		} else {
-        			send_text(con,"invalid timesteps");
-            		return;
-        		}
-        	}
-        	
-        	if (command.args["initial"] != "") {
-        		if (std::atoi(command.args["initial"].c_str()) == 0) {
-        			r->initial = initial_condition(std::atoi(command.args["initial"].c_str()));
-        		} else {
-        			send_text(con,"invalid initial");
-            		return;
-        		}
-        	}
-        	
-        	if (command.args["boundary"] != "") {
-        		if (std::atoi(command.args["boundary"].c_str()) >= 0 && std::atoi(command.args["boundary"].c_str()) <= 1 ) {
-        			r->boundaries = boundary_style(std::atoi(command.args["boundary"].c_str()));
-        		} else {
-        			send_text(con,"invalid boundary");
-            		return;
-        		}
-        	}
-        	
-        	if (command.args["callback_interval"] != "") {
-        		if (std::atoi(command.args["callback_interval"].c_str()) > 0 && std::atoi(command.args["callback_interval"].c_str()) <= r->timesteps ) {
-        			r->callback_interval = std::atoi(command.args["callback_interval"].c_str());
-        		} else {
-        			send_text(con,"invalid callback_interval");
-            		return;
-        		}
-        	}
-        	
-        	if (command.args["smode"] != "") {
-        		if (command.args["smode"] == "0") {
-        			r->mode = JSON;
-        		} else if (command.args["smode"] == "1") {
-        			r->mode = BINARY;
-        		} else {
-        			send_text(con,"invalid smode");
-            		return;
-        		}
-        	}
-        	
-        	m_last_request = r;
-        	
-        	m_coordinator.add_request(r);
+            // simulate
+            // dimensions=[1,2,3]
+            // lx = [1-1000]
+            // ly = [1-1000]
+            // lz = [1-1000]
+            // nx = [1-1000]
+            // ny = [1-1000]
+            // nz = [1-1000]
+            // initial = [0]
+            // timesteps = [1-10000000]
+            // boundary = [0,1]
+            // dt = [float]
+            // alpha = [float]
+            // method = [0,1]
+            // zslice = [0-nz]
+            // smode = [0,1]
+            // callback_interval = [1-timesteps]
+            
+            request_ptr r(new request());
+            
+            r->con = con;
+            
+            if (command.args["dimensions"] != "") {
+                if (std::atoi(command.args["dimensions"].c_str()) >= 1 && std::atoi(command.args["dimensions"].c_str()) <= 3) {
+                    r->dimensions = std::atoi(command.args["dimensions"].c_str());
+                } else {
+                    send_text(con,"invalid dimensions");
+                    return;
+                }
+            }
+            
+            if (command.args["lx"] != "") {
+                if (std::atoi(command.args["lx"].c_str()) >= 1 && std::atoi(command.args["lx"].c_str()) <= 1000) {
+                    r->lx = std::atoi(command.args["lx"].c_str());
+                } else {
+                    send_text(con,"invalid lx");
+                    return;
+                }
+            }
+            
+            if (command.args["ly"] != "") {
+                if (std::atoi(command.args["ly"].c_str()) >= 1 && std::atoi(command.args["ly"].c_str()) <= 1000 && r->dimensions >= 2) {
+                    r->ly = std::atoi(command.args["ly"].c_str());
+                } else {
+                    send_text(con,"invalid ly");
+                    return;
+                }
+            }
+            
+            if (command.args["lz"] != "") {
+                if (std::atoi(command.args["lz"].c_str()) >= 1 && std::atoi(command.args["lz"].c_str()) <= 1000 && r->dimensions == 3) {
+                    r->lz = std::atoi(command.args["lz"].c_str());
+                } else {
+                    send_text(con,"invalid lz");
+                    return;
+                }
+            }
+            
+            if (command.args["nx"] != "") {
+                if (std::atoi(command.args["nx"].c_str()) >= 1 && std::atoi(command.args["nx"].c_str()) <= 10000) {
+                    r->nx = std::atoi(command.args["nx"].c_str());
+                } else {
+                    send_text(con,"invalid nx");
+                    return;
+                }
+            }
+            
+            if (command.args["ny"] != "") {
+                if (std::atoi(command.args["ny"].c_str()) >= 1 && std::atoi(command.args["ny"].c_str()) <= 10000 && r->dimensions >= 2) {
+                    r->ny = std::atoi(command.args["ny"].c_str());
+                } else {
+                    send_text(con,"invalid ny");
+                    return;
+                }
+            }
+            
+            if (command.args["nz"] != "") {
+                if (std::atoi(command.args["nz"].c_str()) >= 1 && std::atoi(command.args["nz"].c_str()) <= 10000 && r->dimensions == 3) {
+                    r->nz = std::atoi(command.args["nz"].c_str());
+                } else {
+                    send_text(con,"invalid nz");
+                    return;
+                }
+            }
+            
+            if (command.args["timesteps"] != "") {
+                if (std::atoi(command.args["timesteps"].c_str()) >= 1 && std::atoi(command.args["timesteps"].c_str()) <= 100000000) {
+                    r->timesteps = std::atoi(command.args["timesteps"].c_str());
+                } else {
+                    send_text(con,"invalid timesteps");
+                    return;
+                }
+            }
+            
+            if (command.args["initial"] != "") {
+                if (std::atoi(command.args["initial"].c_str()) == 0) {
+                    r->initial = initial_condition(std::atoi(command.args["initial"].c_str()));
+                } else {
+                    send_text(con,"invalid initial");
+                    return;
+                }
+            }
+            
+            if (command.args["boundary"] != "") {
+                if (std::atoi(command.args["boundary"].c_str()) >= 0 && std::atoi(command.args["boundary"].c_str()) <= 1 ) {
+                    r->boundaries = boundary_style(std::atoi(command.args["boundary"].c_str()));
+                } else {
+                    send_text(con,"invalid boundary");
+                    return;
+                }
+            }
+            
+            if (command.args["callback_interval"] != "") {
+                if (std::atoi(command.args["callback_interval"].c_str()) > 0 && std::atoi(command.args["callback_interval"].c_str()) <= r->timesteps ) {
+                    r->callback_interval = std::atoi(command.args["callback_interval"].c_str());
+                } else {
+                    send_text(con,"invalid callback_interval");
+                    return;
+                }
+            }
+            
+            if (command.args["smode"] != "") {
+                if (command.args["smode"] == "0") {
+                    r->mode = JSON;
+                } else if (command.args["smode"] == "1") {
+                    r->mode = BINARY;
+                } else {
+                    send_text(con,"invalid smode");
+                    return;
+                }
+            }
+
+            if (command.args["zslice"] != "") {
+                if (std::atoi(command.args["zslice"].c_str()) >= 0 && std::atoi(command.args["zslice"].c_str()) <= r->nz ) {
+                    r->zslice = std::atoi(command.args["zslice"].c_str());
+                } else {
+                    send_text(con,"invalid zslice");
+                    return;
+                }
+            }
+            
+            if (command.args["method"] != "") {
+                if (command.args["method"] == "0") {
+                    r->method = FTCS;
+                } else if (command.args["method"] == "1") {
+                    r->method = CRANK_NICHOLSON;
+                } else {
+                    send_text(con,"invalid method");
+                }
+            }
+
+            m_last_request = r;
+            
+            m_coordinator.add_request(r);
         } else if (command.command == "cancel") {
-        	if (m_last_request) {
-        		send_text(con,"Attempting to cancel simulation...");
-        		m_last_request->cancel();
-        	} else {
-        		send_text(con,"No simulation to cancel.");
-        	}
+            if (m_last_request) {
+                send_text(con,"Attempting to cancel simulation...");
+                m_last_request->cancel();
+            } else {
+                send_text(con,"No simulation to cancel.");
+            }
         } else {
-        	send_text(con,"unrecognized message");
+            send_text(con,"unrecognized message");
             return;
         }
     }
     
     void send_text(connection_ptr con,const std::string& msg) {
-    	con->send("{\"type\":\"message\",\"value\":\""+msg+"\"}");
+        con->send("{\"type\":\"error\",\"value\":\""+msg+"\"}");
     }
 private:
-    request_coordinator&	m_coordinator;
-    request_ptr				m_last_request;
+    request_coordinator&    m_coordinator;
+    request_ptr             m_last_request;
 };
 
 // process_requests is the body function for a processing thread. It loops 
