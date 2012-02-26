@@ -288,6 +288,85 @@ public:
         callback(buf,t);
     }
     
+	/// runs a simulation of heat diffusion of object o using Jacobi iteration
+    /* Run a simulation of heat diffusion of object o using Jacobi iteration and
+	 * backwards euler discretization.
+     *
+     * @param ts Number of timesteps to simulate
+     * @param dt Duration of each time step (s)
+     * @param bs Boundary handling style. Options are:
+     *              CONSTANT: boundary cells are set to `v` and never changed
+     *              PERIODIC: boundary cells wrap around the object to take on
+     *                        the temperature value on the opposite side.
+     * @param v Value to use for CONSTANT boundary handling style
+     * @param S Time independent source term to be added at each timestep
+     * @param callback function to call periodically during the simulation to
+     *                 provide feedback to the caller and test whether to halt
+     *                 the simulation early.
+     * @param callback_interval Number of timesteps between each callback
+     */
+    void jacobi(size_t ts,
+                double dt,
+                boundary_style bs, 
+                double v,
+                const object1d& S,
+                std::function<bool(const object1d&,size_t ts)> callback,
+                size_t callback_interval) const
+    {
+        double dx = m_lx / m_nx;
+        double C = m_alpha*dt/(pow(dx,2));
+        size_t nx = m_nx;
+		
+		object1d xold(m_lx,nx,m_alpha);
+		object1d xcur(m_lx,nx,m_alpha);
+		object1d xnew(m_lx,nx,m_alpha);
+		
+		// load initial values
+		xold = *this;
+		xcur = xold;
+
+        size_t t;
+		size_t MAX_ITER = 1000;
+        double EPSILON = 1e-6;
+
+		double C2 = C/(2*C+1);
+		double C3 = 1/(2*C+1);
+
+		int iter = 0;
+
+		for (t = 0; t < ts; t++) {
+			if (t%callback_interval == 0) {
+                if (!callback(xcur,t)) {
+                    break;
+                }
+            }
+			
+			size_t i = 0;
+			for (i = 0; i < MAX_ITER; i++) {
+				xnew[0] = C2*((bs == CONSTANT ? v : xcur[nx-1]) + xcur[1]) + C3*xold[0];
+				for (size_t x = 1; x < nx-1; x++) {
+					xnew[x] = C2*(xcur[x-1] + xcur[x+1]) + C3*xold[x];
+				}
+				xnew[nx-1] = C2*(xcur[nx-1] + (bs == CONSTANT ? v : xcur[0])) + C3*xold[nx-1];
+				
+				if (xcur.mean_abs_diff(xnew) < EPSILON) {
+					break;
+				}
+				xcur = xnew;
+			}
+			iter += i;
+			
+			for (size_t x = 0; x < nx; x++) {
+				xcur[x] += S[x]*dt;
+			}
+
+			xold = xcur;
+        }
+
+		std::cout << "average iterations: " << (iter/t) << std::endl;
+        callback(xcur,t);
+	}
+
     /// Sets boundary cells of an object to a constant value.
     /* 
      * @param o Object to write to
@@ -306,11 +385,26 @@ public:
         o[0] = o[o.nx()-2];
         o[o.nx()-1] = o[1];
     }
+
+	/// Compute the mean of the absolute value of the difference
+	double mean_abs_diff(object1d& o) const {
+		double val = 0;
+		
+		if (o.nx() != nx()) {
+			throw std::invalid_argument("objects must be the same size to use mean_abs_diff");
+		}
+		
+		for (size_t x = 0; x < m_nx; x++) {
+			val += fabs(m_data[x] - o[x]);
+		}
+		return val / m_nx;
+	}
 private:
     data_type m_data;               // data vector
     double m_lx;                    // length of x dimension (m)
     size_t m_nx;                    // grid spaces in x dimension
     double m_alpha;                 // thermal diffusivity (m^2/s)
 };
+
 
 #endif // HEAT_OBJECT1D_HPP

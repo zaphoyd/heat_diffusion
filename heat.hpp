@@ -22,7 +22,10 @@ enum initial_condition {
 
 enum disc_method {
 	FTCS = 0,
-	CRANK_NICHOLSON = 1
+	CRANK_NICHOLSON = 1,
+	JACOBI = 2,
+	GAUSS_SEIDEL = 3,
+	SOR = 4
 };
 
 /// return a gaussian distribution

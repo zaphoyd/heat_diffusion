@@ -115,3 +115,41 @@ size      µs          µs/size  µs/timestep
 512,000	  72005312	  140.635  72005.312
 729,000	  104246772	  142.999  104246.772
 1,000,000  142738739  142.738  142738.739
+
+
+2012-02-26 Update
+- Added JACOBI, GAUSS-SEIDEL, and SOR (successive over-relaxation) solvers for
+  1D, 2D, and 3D.
+
+Examples:
+3D simulation long enough to show a nice average iterations spread:
+simulate:timesteps=25;method=4;nx=100;ny=100;nz=100;ly=1;lz=1;dimensions=3;callback_interval=5;zslice=50;dt=1.0;
+
+Nice, big, well performing 2D simulation:
+simulate:timesteps=30;method=2;nx=400;ny=400;ly=1;dimensions=2;callback_interval=1;dt=1.0;
+
+Performance Analysis of iterative methods
+
+2D
+300x300 square simulated for 100 seconds with dt=1.0s (except FTCS)
+FTCS: 00:00:49.067901 (dt=0.001s)
+JACOBI: 00:00:23.413229 (avg iterations: 325)
+HAUS-SEIDEL: 00:00:20.495972 (avg iterations: 221)
+SOR: 00:00:07.686357 (avg iterations: 75)
+
+3D
+100x100x100 cube simulated for 10 seconds with dt=0.1s (except FTCS)
+FTCS: 00:00:10.090005 (dt=0.01s)
+JACOBI: 00:00:39.082192, average iterations: 28
+GAUSS-SEIDEL: 00:00:23.739189, average iterations: 17
+SOR: 00:00:10.210998, average iterations: 6
+
+100x100x100 cube simulated for 25 seconds with dt=1.0s (except FTCS)
+FTCS: 00:00:24.048602 (dt=0.01s)
+JACOBI: 00:01:16.475670 (avg iterations: 238)
+GAUSS-SEIDEL: 00:00:38.909941 (avg iterations: 131)
+SOR: 00:00:10.885491 (avg iterations: 33)
+
+At higher dt FTCS blows up and is wildly inaccurate. At shorter simulation
+periods, FTCS is competitive. At longer time periods SOR pulls ahead drasticly
+as FTCS is stuck on smaller timesteps.

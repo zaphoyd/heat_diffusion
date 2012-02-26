@@ -73,6 +73,7 @@ struct request {
     double              dt;
     double              alpha;
     disc_method         method;
+	double				w;
 
     // simulation state
     bool                stop;
@@ -89,9 +90,10 @@ struct request {
        nx(400), ny(0), nz(0),
        initial(GAUSSIAN),
        boundaries(CONSTANT), bvalue(0.0),
-       timesteps(10000), dt(0.001),
+       timesteps(10000), dt(0.1),
        alpha(0.0005),
        method(FTCS),
+	   w(1.65),
        stop(false),
        zslice(0),
        mode(JSON),
@@ -169,6 +171,21 @@ struct request {
                         ),
                         callback_interval
                     );
+					break;
+                case JACOBI:
+                    object.jacobi(
+                        timesteps, dt,
+                        boundaries, bvalue,
+                        source,
+                        std::bind(
+                            &request::print<object1d>,
+                            this,
+                            std::placeholders::_1,
+                            std::placeholders::_2,
+							true
+                        ),
+                        callback_interval
+                    );
                     break;
                 default:
                     break;
@@ -212,6 +229,25 @@ struct request {
                         callback_interval
                     );
                     break;
+				case JACOBI:
+				case GAUSS_SEIDEL:
+				case SOR:
+                    object.iterative(
+						method, w,
+                        timesteps, dt,
+                        boundaries, bvalue,
+                        source,
+                        std::bind(
+                            &request::print<object2d>,
+                            this,
+                            std::placeholders::_1,
+                            std::placeholders::_2,
+							false
+                        ),
+                        callback_interval
+                    );
+                    break;
+
                 default:
                     break;
             }
@@ -223,19 +259,47 @@ struct request {
             
             stop = false;
             
-            object.ftcs(
-                timesteps, dt,
-                boundaries, bvalue,
-                source,
-                std::bind(
-                    &request::print_slice,
-                    this,
-                    std::placeholders::_1,
-                    std::placeholders::_2,
-					false
-                ),
-                callback_interval
-            );
+			switch(method) {
+				case FTCS:
+           			object.ftcs(
+                		timesteps, dt,
+               			boundaries, bvalue,
+               			source,
+                		std::bind(
+                   			&request::print_slice,
+                    		this,
+                    		std::placeholders::_1,
+                   			std::placeholders::_2,
+							false
+                		),
+                		callback_interval
+            		);
+					break;
+				case CRANK_NICHOLSON:
+					// unimplimented
+					send_text("Unimplimented method for 3D.");
+					break;
+				case JACOBI:
+				case GAUSS_SEIDEL:
+				case SOR:
+                    object.iterative(
+						method, w,
+                        timesteps, dt,
+                        boundaries, bvalue,
+                        source,
+                        std::bind(
+                            &request::print_slice,
+                            this,
+                            std::placeholders::_1,
+                            std::placeholders::_2,
+							false
+                        ),
+                        callback_interval
+                    );
+                    break;
+				default:
+					break;
+			}
         } else {
             send_text("Invalid Dimensions, shouldn't be here");
         }
@@ -438,12 +502,31 @@ public:
                 }
             }
             
+			if (command.args["dt"] != "") {
+				std::istringstream iss(command.args["dt"]);
+				
+				double d;
+				
+				if (!(iss >> std::dec >> d).fail()) {
+					r->dt = d;
+				} else {
+					send_text(con,"invalid floating point value for dt");
+					return;
+				}
+			}
+
             if (command.args["method"] != "") {
                 if (command.args["method"] == "0") {
                     r->method = FTCS;
                 } else if (command.args["method"] == "1") {
                     r->method = CRANK_NICHOLSON;
-                } else {
+                } else if (command.args["method"] == "2") {
+					r->method = JACOBI;	
+				} else if (command.args["method"] == "3") {
+					r->method = GAUSS_SEIDEL;
+				} else if (command.args["method"] == "4") {
+					r->method = SOR;
+				} else {
                     send_text(con,"invalid method");
                 }
             }
@@ -531,6 +614,9 @@ int main(int argc, char* argv[]) {
         
         echo_endpoint.alog().unset_level(websocketpp::log::alevel::ALL);
         echo_endpoint.elog().unset_level(websocketpp::log::elevel::ALL);
+
+        echo_endpoint.alog().set_level(websocketpp::log::alevel::CONNECT);
+        echo_endpoint.alog().set_level(websocketpp::log::alevel::DISCONNECT);
         
         echo_endpoint.elog().set_level(websocketpp::log::elevel::ERROR);
         echo_endpoint.elog().set_level(websocketpp::log::elevel::FATAL);
@@ -541,7 +627,7 @@ int main(int argc, char* argv[]) {
             threads.push_back(boost::shared_ptr<boost::thread>(new boost::thread(boost::bind(&process_requests, &rc))));
         }
         
-        std::cout << "Starting WebSocket sleep server on port " << port << " with " << num_threads << " processing threads." << std::endl;
+        std::cout << "Starting WebSocket heat server on port " << port << " with " << num_threads << " processing threads." << std::endl;
         echo_endpoint.listen(port);
     } catch (std::exception& e) {
         std::cerr << "Exception: " << e.what() << std::endl;

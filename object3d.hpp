@@ -275,7 +275,169 @@ public:
         }
         callback(buf[(t+1)%2],t);
     }
-    
+   
+		/// runs a simulation of heat diffusion of object o using an iterative method
+    /* Run a simulation of heat diffusion of object o using the specified iterative
+	 * method. 
+     *
+	 * @param method method to use for performing the iterative calculation. Options:
+	 *               JACOBI: Jacobi Iteration
+	 *               GAUSS_SEIDEL: Gauss Seidel iteration
+	 *               SOR: Successive Over-relaxation
+	 * @param w Relaxation factor for use when method is SOR
+     * @param ts Number of timesteps to simulate
+     * @param dt Duration of each time step (s)
+     * @param bs Boundary handling style. Options are:
+     *              CONSTANT: boundary cells are set to `v` and never changed
+     *              PERIODIC: boundary cells wrap around the object to take on
+     *                        the temperature value on the opposite side.
+     * @param v Value to use for CONSTANT boundary handling style
+     * @param S Time independent source term to be added at each timestep
+     * @param callback function to call periodically during the simulation to
+     *                 provide feedback to the caller and test whether to halt
+     *                 the simulation early.
+     * @param callback_interval Number of timesteps between each callback
+     */
+    void iterative(disc_method method,
+			    double w,
+			    size_t ts,
+                double dt,
+                boundary_style bs, 
+                double v,
+                const object3d& S,
+                std::function<bool(const object3d&,size_t ts)> callback,
+                size_t callback_interval) const
+    {
+        double dx = m_lx / m_nx;
+		double dy = m_ly / m_ny;
+		double dz = m_lz / m_nz;
+        double C = m_alpha*dt/(pow(dx,2));
+        size_t nx = m_nx+2;
+		size_t ny = m_ny+2;
+		size_t nz = m_nz+2;
+		
+		object3d xold(m_lx,m_ly,m_lz,nx,ny,nz,m_alpha);
+		object3d xcur(m_lx,m_ly,m_lz,nx,ny,nz,m_alpha);
+		object3d xnew(m_lx,m_ly,m_lz,nx,ny,nz,m_alpha);
+		
+		// fill the buffer array with data from o
+        for (size_t x = 1; x < nx-1; x++) {
+            for (size_t y = 1; y < ny-1; y++) {
+				for (size_t z = 1; z < nz-1; z++) {
+                	xold[x][y][z] = m_data[x-1][y-1][z-1];
+				}
+            }
+        }
+        
+        // compute boundary cell
+        if (bs == CONSTANT) {
+            compute_constant_boundaries(xold,v);
+        } else {
+            compute_periodic_boundaries(xold);
+        }
+		
+		xcur = xold;
+
+        size_t t;
+		size_t MAX_ITER = 1000;
+        double EPSILON = 1e-6;
+
+		double C2 = (method == SOR ? (w*C)/(6*C+1) : C/(6*C+1));
+		double C3 = (method == SOR ? w/(6*C+1) : 1/(6*C+1));
+
+		int iter = 0;
+
+		for (t = 0; t < ts; t++) {
+			if (t%callback_interval == 0) {
+                if (!callback(xcur,t)) {
+                    break;
+                }
+            }
+			
+			size_t i = 0;
+			for (i = 0; i < MAX_ITER; i++) {
+				if (method == JACOBI) {
+					for (size_t x = 1; x < nx-1; x++) {
+						for (size_t y = 1; y < ny-1; y++) {
+							for (size_t z = 1; z < nz-1; z++) {
+								xnew[x][y][z] = C2*(xcur[x][y-1][z] + 
+												    xcur[x-1][y][z] + 
+												    xcur[x+1][y][z] +
+												    xcur[x][y+1][z] +
+												    xcur[x][y][z-1] +
+												    xcur[x][y][z+1]) +
+											    C3*xold[x][y][z];
+							}
+						}
+					}
+					if (xcur.mean_abs_diff(xnew,false) < EPSILON) {
+						break;
+					}
+					xcur = xnew;
+				} else if (method == GAUSS_SEIDEL) {
+					xnew = xcur;
+					for (size_t x = 1; x < nx-1; x++) {
+						for (size_t y = 1; y < ny-1; y++) {
+							for (size_t z = 1; z < nz-1; z++) {
+								xcur[x][y][z] = C2*(xcur[x][y-1][z] + 
+												    xcur[x-1][y][z] + 
+												    xcur[x+1][y][z] +
+												    xcur[x][y+1][z] +
+												    xcur[x][y][z-1] +
+												    xcur[x][y][z+1]) +
+											    C3*xold[x][y][z];
+							}
+						}
+					}
+					if (xcur.mean_abs_diff(xnew,false) < EPSILON) {
+						break;
+					}
+				} else {
+					xnew = xcur;
+					for (size_t x = 1; x < nx-1; x++) {
+						for (size_t y = 1; y < ny-1; y++) {
+							for (size_t z = 1; z < nz-1; z++) {
+								xcur[x][y][z] = (1-w)*xcur[x][y][z] + 
+											    C2*(xcur[x][y-1][z] + 
+											        xcur[x-1][y][z] + 
+											        xcur[x+1][y][z] +
+											        xcur[x][y+1][z] +
+											        xcur[x][y][z-1] +
+											        xcur[x][y][z+1]) +
+										        C3*xold[x][y][z];
+							}
+						}
+					}
+					if (xcur.mean_abs_diff(xnew,false) < EPSILON) {
+						break;
+					}
+				}
+			}
+			iter += i;
+			
+			for (size_t x = 1; x < nx-1; x++) {
+				for (size_t y = 1; y < ny-1; y++) {
+					for (size_t z = 1; z < nz-1; z++) {
+						xcur[x][y][z] += S[x-1][y-1][z-1]*dt;
+					}
+				}
+			}
+			
+			// boundary conditions
+            // The above simulation loop doesn't change the edges. If they were
+            // constant this is correct, if they were periodic they need to be 
+            // re-filled.
+            if (bs == PERIODIC) {
+                compute_periodic_boundaries(xcur);
+            }
+
+			xold = xcur;
+        }
+
+		std::cout << "average iterations: " << (iter/t) << std::endl;
+        callback(xcur,t);
+	}
+
     /// Sets boundary cells of an object to a constant value.
     /* 
      * @param o Object to write to
@@ -336,7 +498,34 @@ public:
         }
         }
     }
+	
+	/// Compute the mean of the absolute value of the difference
+	/*
+	 *
+	 * @param o Object to subtract
+	 * @param edges Whether or not to include the edge rows in the calculation. Default: true
+	 */
+	double mean_abs_diff(object3d& o, bool edges = true) const {
+		double val = 0;
+		
+		if (o.nx() != nx() || o.ny() != ny() || o.nz() != nz()) {
+			throw std::invalid_argument("objects must be the same size to use mean_abs_diff");
+		}
+		
+		size_t start = (edges ? 0 : 1);
+		size_t xend = (edges ? m_nx : m_nx-1);
+		size_t yend = (edges ? m_ny : m_ny-1);
+		size_t zend = (edges ? m_nz : m_nz-1);
 
+		for (size_t x = start; x < xend; x++) {
+			for (size_t y = start; y < yend; y++) {
+				for (size_t z = start; z < zend; z++) {
+					val += fabs(m_data[x][y][z] - o[x][y][z]);
+				}
+			}
+		}
+		return val / (m_nx*m_ny);
+	}
 private:
     data_type m_data;               // vector representing evenly spaced grid points
     double m_lx;                    // length of x dimension (m)

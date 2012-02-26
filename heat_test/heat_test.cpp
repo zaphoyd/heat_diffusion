@@ -9,7 +9,7 @@
 bool print1d(const object1d& o,size_t ts) {
 	std::string sep;
 	
-	std::cout << "[" << std::endl;
+	std::cout << "[";
 	
 	for (size_t i = 0; i < o.nx(); i++) {
 		std::cout << sep << o[i];
@@ -93,7 +93,11 @@ int main() {
     object3d s3(lx,ly,lz,nx,ny,nz,0.0);
     o3.init(GAUSSIAN);
     s3.init(FLAT);
-	
+
+	print1d(o1,0);
+	print1d(s1,0);
+	std::cout << "diff: " << o1.compute_mean_abs_diff(s1) << std::endl;
+
 	/*o2.ftcs(
 		5, dt,			// timesteps, dt
 		CONSTANT, 0.0,	// boundaries
@@ -102,12 +106,20 @@ int main() {
 		5				// callback interval
 	);*/
 	
-	o2.crank_nicholson(
+	/*o2.crank_nicholson(
 		3, dt,			// timesteps, dt
 		CONSTANT, 0.0,	// boundaries
 		s2,				// source term
 		&print2d,		// callback function
 		5				// callback interval
+	);*/
+
+	o1.jacobi (
+		5, dt,
+		CONSTANT, 0.0,
+		s1,
+		&print1d,
+		1
 	);
 	
 	/*o1.crank_nicholson(
