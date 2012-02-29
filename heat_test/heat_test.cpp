@@ -3,6 +3,8 @@
 #include "../object2d.hpp"
 #include "../object3d.hpp"
 
+#include <chrono>
+#include <map>
 #include <iostream>
 #include <string>
 
@@ -67,17 +69,21 @@ bool print3d(const object3d& o,size_t ts) {
 	return true;
 }
 
+// use this if you don't want sub-steps printed.
+bool empty(const object3d& o,size_t ts) {
+	return true;
+}
+
 int main() {
 	double lx = 1.0;
 	double ly = 1.0;
 	double lz = 1.0;
 	
-	size_t nx = 3;
-	size_t ny = 3;
-	size_t nz = 3;
+	size_t nx = 70;
+	size_t ny = 70;
+	size_t nz = 70;
 	
 	double alpha = 0.0005;
-	double dt = 0.001;
 	
 	object1d o1(lx,nx,alpha);
     object1d s1(lx,nx,0.0);
@@ -93,42 +99,38 @@ int main() {
     object3d s3(lx,ly,lz,nx,ny,nz,0.0);
     o3.init(GAUSSIAN);
     s3.init(FLAT);
-
-	print1d(o1,0);
-	print1d(s1,0);
-	std::cout << "diff: " << o1.compute_mean_abs_diff(s1) << std::endl;
-
-	/*o2.ftcs(
-		5, dt,			// timesteps, dt
-		CONSTANT, 0.0,	// boundaries
-		s2,				// source term
-		&print2d,		// callback function
-		5				// callback interval
-	);*/
 	
-	/*o2.crank_nicholson(
-		3, dt,			// timesteps, dt
-		CONSTANT, 0.0,	// boundaries
-		s2,				// source term
-		&print2d,		// callback function
-		5				// callback interval
-	);*/
-
-	o1.jacobi (
-		5, dt,
-		CONSTANT, 0.0,
-		s1,
-		&print1d,
-		1
+	/*std::cout << nx << "x" << ny << "x" << nz << " FTCS simulation:" << std::endl;
+	auto start = std::chrono::high_resolution_clock::now();
+	o3.ftcs (10000, 0.001, // timesteps, dt
+		CONSTANT, 0.0, // boundary conditions
+		s3, // source term
+		&empty, 10 // callback settings
 	);
+	auto end = std::chrono::high_resolution_clock::now();
+	auto duration = end-start;
+	std::cout << (duration.count()/1000000000.0) << " seconds" << std::endl;*/
 	
-	/*o1.crank_nicholson(
-		5, dt,			// timesteps, dt
-		CONSTANT, 0.0,	// boundaries
-		s1,				// source term
-		&print1d,		// callback function
-		5				// callback interval
-	);*/
+	std::map<disc_method,std::string> sims;
+	
+	sims[JACOBI] = "Jacobi";
+	sims[GAUSS_SEIDEL] = "Gauss-Seidel";
+	sims[SOR] = "Successive Over-relaxation";
+	
+	for (auto &i : sims) {
+		std::cout << nx << "x" << ny << "x" << nz << " " << i.second << " simulation:" << std::endl;
+		auto start = std::chrono::high_resolution_clock::now();
+		o3.iterative (i.first, 1.65,
+			10, 1.0, // timesteps, dt
+			CONSTANT, 0.0, // boundary conditions
+			s3, // source term
+			&empty, 10 // callback settings
+		);
+		auto end = std::chrono::high_resolution_clock::now();
+		auto duration = end-start;
+		std::cout << (duration.count()/1000000000.0) << " seconds" << std::endl;
+	}
+	
 	
 	return 0;
 }

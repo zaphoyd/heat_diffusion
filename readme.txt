@@ -120,6 +120,9 @@ size      µs          µs/size  µs/timestep
 2012-02-26 Update
 - Added JACOBI, GAUSS-SEIDEL, and SOR (successive over-relaxation) solvers for
   1D, 2D, and 3D.
+- All three new solvers should work with periodic boundary conditions, non-cubic 
+  domains, and the constant source term. Those features have not been extensively
+  tested.
 
 Examples:
 3D simulation long enough to show a nice average iterations spread:
