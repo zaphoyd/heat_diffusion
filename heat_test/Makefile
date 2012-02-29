@@ -8,7 +8,7 @@ DEBUG				= 0
 CFLAGS = $(CPP11)
 LDFLAGS = 
 
-CXX		= clang++
+CXX		= g++
 
 ifeq ($(CXX), clang++)
 	CFLAGS += -stdlib=libc++
