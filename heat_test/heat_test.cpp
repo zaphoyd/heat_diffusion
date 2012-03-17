@@ -79,9 +79,9 @@ int main() {
 	double ly = 1.0;
 	double lz = 1.0;
 	
-	size_t nx = 70;
-	size_t ny = 70;
-	size_t nz = 70;
+	size_t nx = 129;
+	size_t ny = 129;
+	size_t nz = 129;
 	
 	double alpha = 0.0005;
 	
@@ -110,27 +110,30 @@ int main() {
 	auto end = std::chrono::high_resolution_clock::now();
 	auto duration = end-start;
 	std::cout << (duration.count()/1000000000.0) << " seconds" << std::endl;*/
+
+	std::cout << nx << "x" << ny << "x" << nz << " " << " SOR simulation:" << std::endl;
+	auto start = std::chrono::high_resolution_clock::now();
+	o3.iterative (SOR, 1.65,
+		10, 1.0, // timesteps, dt
+		CONSTANT, 0.0, // boundary conditions
+		s3, // source term
+		&empty, 10 // callback settings
+	);
+	auto end = std::chrono::high_resolution_clock::now();
+	auto duration = end-start;
+	std::cout << (duration.count()/1000000000.0) << " seconds" << std::endl;
 	
-	std::map<disc_method,std::string> sims;
-	
-	sims[JACOBI] = "Jacobi";
-	sims[GAUSS_SEIDEL] = "Gauss-Seidel";
-	sims[SOR] = "Successive Over-relaxation";
-	
-	for (auto &i : sims) {
-		std::cout << nx << "x" << ny << "x" << nz << " " << i.second << " simulation:" << std::endl;
-		auto start = std::chrono::high_resolution_clock::now();
-		o3.iterative (i.first, 1.65,
-			10, 1.0, // timesteps, dt
-			CONSTANT, 0.0, // boundary conditions
-			s3, // source term
-			&empty, 10 // callback settings
-		);
-		auto end = std::chrono::high_resolution_clock::now();
-		auto duration = end-start;
-		std::cout << (duration.count()/1000000000.0) << " seconds" << std::endl;
-	}
-	
+	std::cout << nx << "x" << ny << "x" << nz << " " << " Multigrid simulation:" << std::endl;
+	start = std::chrono::high_resolution_clock::now();
+	o3.multigrid (RS_GAUSS_SEIDEL,
+		2, // ncycles
+		10, 1.0, // timesteps, dt
+		s3, // source term
+		&empty, 10 // callback settings
+	);
+	end = std::chrono::high_resolution_clock::now();
+	duration = end-start;
+	std::cout << (duration.count()/1000000000.0) << " seconds" << std::endl;
 	
 	return 0;
 }

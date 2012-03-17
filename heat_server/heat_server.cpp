@@ -67,12 +67,14 @@ struct request {
     size_t              ny;
     size_t              nz;
     initial_condition   initial;
+    initial_condition   init_source;
     boundary_style      boundaries;
     double              bvalue;
     size_t              timesteps;
     double              dt;
     double              alpha;
     disc_method         method;
+    relax_scheme		scheme;
 	double				w;
 
     // simulation state
@@ -89,10 +91,12 @@ struct request {
        lx(1), ly(0), lz(0),
        nx(400), ny(0), nz(0),
        initial(GAUSSIAN),
+       init_source(FLAT),
        boundaries(CONSTANT), bvalue(0.0),
        timesteps(10000), dt(0.1),
        alpha(0.0005),
        method(FTCS),
+       scheme(RS_RB_GAUSS_SEIDEL),
 	   w(1.65),
        stop(false),
        zslice(0),
@@ -136,8 +140,18 @@ struct request {
         if (dimensions == 1) {
             object1d object(lx,nx,alpha);
             object1d source(lx,nx,0.0);
-            object.init(initial);
-            source.init(FLAT);
+            
+            if (initial == SPIKE) {
+            	object.init(initial,1.0);
+            } else {
+            	object.init(initial);
+            }
+            
+            if (init_source == SPIKE) {
+            	source.init(init_source,1.0);
+            } else {
+            	source.init(init_source);
+            }
             
             stop = false;
             
@@ -193,8 +207,18 @@ struct request {
         } else if (dimensions == 2) {
             object2d object(lx,ly,nx,ny,alpha);
             object2d source(lx,ly,nx,ny,0.0);
-            object.init(initial);
-            source.init(FLAT);
+            
+            if (initial == SPIKE) {
+            	object.init(initial,1.0);
+            } else {
+            	object.init(initial);
+            }
+            
+            if (init_source == SPIKE) {
+            	source.init(init_source,1.0);
+            } else {
+            	source.init(init_source);
+            }
             
             stop = false;
             
@@ -254,8 +278,18 @@ struct request {
         } else if (dimensions == 3) {
             object3d object(lx,ly,lz,nx,ny,nz,alpha);
             object3d source(lx,ly,lz,nx,ny,nz,0.0);
-            object.init(initial);
-            source.init(FLAT);
+            
+            if (initial == SPIKE) {
+            	object.init(initial,1.0);
+            } else {
+            	object.init(initial);
+            }
+            
+            if (init_source == SPIKE) {
+            	source.init(init_source,1.0);
+            } else {
+            	source.init(init_source);
+            }
             
             stop = false;
             
@@ -296,6 +330,22 @@ struct request {
                         ),
                         callback_interval
                     );
+                    break;
+                case MULTIGRID:
+                    object.multigrid(
+                    		scheme,
+                    		2,
+                    		timesteps,dt,
+                    		source,
+                    		std::bind(
+                            	&request::print_slice,
+                            	this,
+                            	std::placeholders::_1,
+                            	std::placeholders::_2,
+								true
+                        	),
+                        	callback_interval
+                        );
                     break;
 				default:
 					break;
@@ -456,10 +506,23 @@ public:
             }
             
             if (command.args["initial"] != "") {
-                if (std::atoi(command.args["initial"].c_str()) == 0) {
+                if (std::atoi(command.args["initial"].c_str()) == 0 ||
+                    std::atoi(command.args["initial"].c_str()) == 1 ||
+                    std::atoi(command.args["initial"].c_str()) == 3) {
                     r->initial = initial_condition(std::atoi(command.args["initial"].c_str()));
                 } else {
                     send_text(con,"invalid initial");
+                    return;
+                }
+            }
+            
+            if (command.args["source"] != "") {
+                if (std::atoi(command.args["source"].c_str()) == 0 ||
+                    std::atoi(command.args["source"].c_str()) == 1 ||
+                    std::atoi(command.args["source"].c_str()) == 3) {
+                    r->init_source = initial_condition(std::atoi(command.args["source"].c_str()));
+                } else {
+                    send_text(con,"invalid source");
                     return;
                 }
             }
@@ -472,6 +535,8 @@ public:
                     return;
                 }
             }
+            
+            
             
             if (command.args["callback_interval"] != "") {
                 if (std::atoi(command.args["callback_interval"].c_str()) > 0 && std::atoi(command.args["callback_interval"].c_str()) <= r->timesteps ) {
@@ -526,8 +591,22 @@ public:
 					r->method = GAUSS_SEIDEL;
 				} else if (command.args["method"] == "4") {
 					r->method = SOR;
+				} else if (command.args["method"] == "5") {
+					r->method = MULTIGRID;
 				} else {
                     send_text(con,"invalid method");
+                }
+            }
+            
+            if (command.args["scheme"] != "") {
+                if (command.args["scheme"] == "0") {
+                    r->scheme = RS_JACOBI;
+                } else if (command.args["scheme"] == "1") {
+                    r->scheme = RS_GAUSS_SEIDEL;
+                } else if (command.args["scheme"] == "2") {
+					r->scheme = RS_RB_GAUSS_SEIDEL;	
+				} else {
+                    send_text(con,"invalid scheme");
                 }
             }
 
@@ -618,7 +697,7 @@ int main(int argc, char* argv[]) {
         echo_endpoint.alog().set_level(websocketpp::log::alevel::CONNECT);
         echo_endpoint.alog().set_level(websocketpp::log::alevel::DISCONNECT);
         
-        echo_endpoint.elog().set_level(websocketpp::log::elevel::ERROR);
+        echo_endpoint.elog().set_level(websocketpp::log::elevel::RERROR);
         echo_endpoint.elog().set_level(websocketpp::log::elevel::FATAL);
         
         std::list<boost::shared_ptr<boost::thread> > threads;

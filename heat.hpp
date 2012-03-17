@@ -17,7 +17,8 @@ enum boundary_style {
 enum initial_condition {
 	FLAT = 0,
 	GAUSSIAN = 1,
-	GAUSSIAN_NOISE = 2
+	GAUSSIAN_NOISE = 2,
+	SPIKE = 3
 };
 
 enum disc_method {
@@ -25,7 +26,14 @@ enum disc_method {
 	CRANK_NICHOLSON = 1,
 	JACOBI = 2,
 	GAUSS_SEIDEL = 3,
-	SOR = 4
+	SOR = 4,
+	MULTIGRID = 5
+};
+
+enum relax_scheme {
+	RS_JACOBI = 0,
+	RS_GAUSS_SEIDEL = 1,
+	RS_RB_GAUSS_SEIDEL = 2
 };
 
 /// return a gaussian distribution
