@@ -96,7 +96,7 @@ struct request {
        timesteps(10000), dt(0.1),
        alpha(0.0005),
        method(FTCS),
-       scheme(RS_RB_GAUSS_SEIDEL),
+       scheme(RS_GAUSS_SEIDEL),
 	   w(1.65),
        stop(false),
        zslice(0),
