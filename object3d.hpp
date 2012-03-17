@@ -107,7 +107,6 @@ public:
             for (size_t y = 0; y < m_ny; y++) {
                 for (size_t z = 0; z < m_nz; z++) {
                     m_data[x][y][z] = gx[x]*gy[y]*gz[z];
-                    //m_data[x][y][z] = 0.5;
                 }
             }
         }
@@ -158,7 +157,7 @@ public:
                 }
             }
         }
-		
+		max = 1.0;
 		//std::cout << "max: " << max << std::endl;
 
 		for (size_t x = 0; x < sx; x++) {
@@ -199,7 +198,6 @@ public:
             }
         }
 		max = 1.0;
-		//std::cout << "max: " << max << std::endl;
  
         for (size_t x = 0; x < sx; x++) {
             for (size_t y = 0; y < sy; y++) {
@@ -342,7 +340,7 @@ public:
         callback(buf[(t+1)%2],t);
     }
    
-		/// runs a simulation of heat diffusion of object o using an iterative method
+	/// runs a simulation of heat diffusion of object o using an iterative method
     /* Run a simulation of heat diffusion of object o using the specified iterative
 	 * method. 
      *
@@ -600,20 +598,26 @@ public:
 		return val / (m_nx*m_ny);
 	}
 	
-	/* Full Multigrid Algorithm for solution of the steady state heat
-	 * equation with forcing.  On input u[1..n][1..n] contains the
-	 * right-hand side ρ, while on output it returns the solution.  The
-	 * dimension n must be of the form 2j + 1 for some integer j. (j is
-	 * actually the number of grid levels used in the solution, called ng
-	 * below.) ncycle is the number of V-cycles to be used at each level.
-	 */
+	/// runs a simulation of heat diffusion of object o using multigrid method
+    /* Run a simulation of heat diffusion of object o using the multigrid algorithm
+     *
+	 * @param scheme scheme to use for performing the relaxation. Options:
+	 *               RS_JACOBI: Jacobi
+	 *               RS_GAUSS_SEIDEL: Gauss Seidel 
+	 *               RS_RB_GAUSS_SEIDEL: Red/Black Gauss Seidel
+	 * @param ncycle Number of v-cycles to perform
+	 * @param ts Number of timesteps to simulate
+     * @param dt Duration of each time step (s)
+     * @param S Time independent source term to be added at each timestep
+     * @param callback function to call periodically during the simulation to
+     *                 provide feedback to the caller and test whether to halt
+     *                 the simulation early.
+     * @param callback_interval Number of timesteps between each callback
+     */
 	void multigrid(relax_scheme scheme,
-			       //double w
 				   int ncycle,
 			       size_t ts,
                    double dt,
-                   //boundary_style bs, 
-                   //double v,
                    const object3d& S,
                    std::function<bool(const object3d&,size_t ts)> callback,
                    size_t callback_interval) {
@@ -656,39 +660,10 @@ public:
 			scratch[i] = object3d(nn,nn,nn,m_alpha);
 			rstrct(solution[i+1],solution[i]);
 			rstrct(source[i+1],source[i]);
-
-			//callback(source[i+1],0);
-			//sleep(1);
 		}
 		
 		size_t t;
 		
-		//callback(rho[ng-4],0);
-		
-		//solve_small(rho[0],solution[0]);
-		
-		/*nn = n;
-		rhs[ng-1] = solution[ng-1];
-		for (t = 0; t < ts; t++) {
-			for (int i = 0; i < 25; i++) {
-				relax(dt,solution[ng-1],rhs[ng-1],solution[ng-1]);
-			}
-			
-			for (size_t x = 0; x < nn; x++) {
-				for (size_t y = 0; y < nn; y++) {
-					for (size_t z = 0; z < nn; z++) {
-						solution[ng-1][x][y][z] += source[ng-1][x][y][z]*dt;
-					}
-				}
-			}
-
-			rhs[ng-1] = solution[ng-1];
-			std::cout << solution[ng-1][64][64][64] << ", " << solution[ng-1][65][65][65] << std::endl;
-		}
-
-		callback(solution[ng-1],t);
-		return;*/
-
 		// allocate memory for the intermediate levels
 		nn = 3;
 		//solution[0] = object3d(nn,nn,nn,m_alpha);
@@ -710,7 +685,7 @@ public:
             }
             
             // At each timestep we will run the multigrid algorithm with the 
-            // output of the previous timestep as the rhs. This involves
+            // output of the previous timestep as the rhs.
             
             
             // Set up data
@@ -786,7 +761,7 @@ public:
 			// at this point the solution after this timestep will be stored in 
 			// solution[ng-1]
 			
-			// Add time dependent source term
+			// Add source term
 			for (size_t x = 0; x < nn; x++) {
 				for (size_t y = 0; y < nn; y++) {
 					for (size_t z = 0; z < nn; z++) {
@@ -963,7 +938,6 @@ public:
 		double C3 = 1.0/(6*C+1.0);
 		
 		// plain Gauss-Seidel / Jacobi
-		
 		for (size_t x = 1; x < n-1; x++) {
 			for (size_t y = 1; y < n-1; y++) {
 				for (size_t z = 1; z < n-1; z++) {
