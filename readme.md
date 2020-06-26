@@ -6,9 +6,11 @@
 
 Objects can be created with any length and subdivided into discrete partitions. Length (lx,ly,lz) and partitioning (nx,ny,nz) are independent for each dimension. Objects can be initialized using a FLAT or GAUSSIAN method.
 
-Two solvers are (mostly) implimented. Forward-Time Central-Space is implimented for all three dimensions. Crank Nicholson is implimented in 1D and 2D. The matrix and object storage/serialization code was designed before I understood exactly how Crank-Nicholson actually worked. As a result it is heavily optimized for FTCS (dimensionally independent lookups) and embarassingly slow at CN which needs memory contiguous matricies and vectors to really work at all. I have not implimented 3D Crank Nicholson because without rewriting my matrix and object data structures it would be too slow to even test for correctness.
+Five solvers are (mostly) implimented. Forward-Time Central-Space is implimented for all three dimensions. Crank Nicholson is implimented in 1D and 2D. The matrix and object storage/serialization code was designed before I understood exactly how Crank-Nicholson actually worked. As a result it is heavily optimized for FTCS (dimensionally independent lookups) and embarassingly slow at CN which needs memory contiguous matricies and vectors to really work at all. I have not implimented 3D Crank Nicholson because without rewriting my matrix and object data structures it would be too slow to even test for correctness.
 
-Both solvers support adding an arbitrary time independent source term and both flat (with the option to specify a non-zero boundary value) and periodic where the boundary conditions wrap around.
+Both FTCS and Crank Nicholson support adding an arbitrary time independent source term and both flat (with the option to specify a non-zero boundary value) and periodic where the boundary conditions wrap around.
+
+Jacobi, Gauss-Seidel, and successive over-relaxation (SOR) solvers for 1D, 2D, and 3D were added at a later point. All three new solvers should work with periodic boundary conditions, non-cubic domains, and the constant source term but those features have not been extensively tested.
 
 ## heat_test
 This is a simple command line utility that bootstraps the solver code and allows running the solver in small input tests. It has no external dependencies beyond the C++11 STL.
@@ -81,31 +83,18 @@ Building the server requires Boost and WebSocket++ (github.com/zaphoyd/websocket
 
 ## FTCS 3D 1000 time steps
 
-| Size | Time |
-| --- | --- |
-| 10x10x10 cube | 00:00:00.143543 |
-| 20x20x20 cube | 00:00:01.131008 |
-| 30x30x30 cube | 00:00:03.829194 |
-| 40x40x40 cube | 00:00:09.083705 |
-| 50x50x50 cube | 00:00:17.804704 |
-| 60x60x60 cube | 00:00:30.732263 |
-| 70x70x70 cube | 00:00:48.869378 |
-| 80x80x80 cube | 00:01:12.005312 |
-| 90x90x90 cube | 00:01:44.246772 |
-| 100x100x100 cube | 00:02:22.738739 |
-
-| size | µs | µs/size | µs/timestep |
-| --- | --- | --- | --- |
-|1,000 | 143543 | 143.543 | 143.543 |
-|8,000 | 1131008 | 141.376 | 1131.008 |
-|27,000 | 3829194 | 141.822 | 3829.194 |
-|64,000 | 9083705 | 141.932 | 9083.705 |
-|125,000 | 17804704 | 142.437 | 17804.704 |
-|216,000 | 30732263 | 142.278 | 30732.263 |
-|343,000 | 48869378 | 142.476 | 48869.378 |
-|512,000 | 72005312 | 140.635 | 72005.312 |
-|729,000 | 104246772 | 142.999 | 104246.772 |
-|1,000,000 | 142738739 | 142.738 | 142738.739 |
+| Size | Time | Volume | µs | µs/size | µs/timestep |
+| --- | --- | --- | --- | --- | --- |
+| 10x10x10 cube | 00:00:00.143543 | 1,000 | 143543 | 143.543 | 143.543 |
+| 20x20x20 cube | 00:00:01.131008 | 8,000 | 1131008 | 141.376 | 1131.008 |
+| 30x30x30 cube | 00:00:03.829194 | 27,000 | 3829194 | 141.822 | 3829.194 |
+| 40x40x40 cube | 00:00:09.083705 | 64,000 | 9083705 | 141.932 | 9083.705 |
+| 50x50x50 cube | 00:00:17.804704 | 125,000 | 17804704 | 142.437 | 17804.704 |
+| 60x60x60 cube | 00:00:30.732263 | 216,000 | 30732263 | 142.278 | 30732.263 |
+| 70x70x70 cube | 00:00:48.869378 | 343,000 | 48869378 | 142.476 | 48869.378 |
+| 80x80x80 cube | 00:01:12.005312 | 512,000 | 72005312 | 140.635 | 72005.312 |
+| 90x90x90 cube | 00:01:44.246772 | 729,000 | 104246772 | 142.999 | 104246.772 |
+| 100x100x100 cube | 00:02:22.738739 | 1,000,000 | 142738739 | 142.738 | 142738.739 |
 
 ## Performance Analysis of iterative methods
 
