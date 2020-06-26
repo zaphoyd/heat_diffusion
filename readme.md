@@ -43,8 +43,9 @@ Arguments for the `simulate` command:
 | `callback_interval` | timestep interval used to check for cancel and return intermediate results. | No | 1,`timesteps` | 100 |
 | `smode` | simulation snapshot format, `0=JSON,1=BINARY`, `heat_client` automatically chooses and sends this value based on browser capabilities | No | 0,1 | 0 | 
         
+# Usage
 
-# Examples
+## Examples
 | Command | Effect |
 | --- | --- |
 | `simulate:` | Run simulation with default parameters |
@@ -54,8 +55,6 @@ Arguments for the `simulate` command:
 | `simulate:timesteps=100000;dimensions=2;nx=100; ny=100;ly=1.0;callback_interval=1000;` | Run a longer simulation and ask for progress update renderings every 1000 timesteps |
 | `simulate:timesteps=25;method=4;nx=100;ny=100;nz=100; ly=1;lz=1;dimensions=3;callback_interval=5;zslice=50;dt=1.0;` | 3D simulation long enough to show a nice average iterations spread |
 | `simulate:timesteps=30;method=2;nx=400;ny=400; ly=1;dimensions=2;callback_interval=1;dt=1.0;` | Nice, big, well performing 2D simulation |
-
-# Usage
 
 ## Browser Support
 
